@@ -31,8 +31,8 @@ def main():
     
     os.makedirs('training_environment/data/tokenizer',exist_ok=True)
     
-    train_spm(en_file,'training_environment/data/spm_en',args.vocab_size)
-    train_spm(vi_file,'training_environment/data/spm_vi',args.vocab_size)
+    train_spm(en_file,'training_environment/data/tokenizer/spm_en',args.vocab_size)
+    train_spm(vi_file,'training_environment/data/tokenizer/spm_vi',args.vocab_size)
     
 if __name__ == "__main__":
     main()
