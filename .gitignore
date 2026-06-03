@@ -1,0 +1,90 @@
+# 1. Môi trường Python & Cấu hình (Backend & Training)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Môi trường ảo (Virtual Environments)
+.env
+.venv
+env/
+venv/
+ENV/
+
+# 2. Machine Learning, Dữ liệu & Jupyter Notebooks
+# Phải chặn thư mục chứa dataset gốc và dataset đã xử lý
+training_environment/data/
+backend/ml_service/data/
+
+# Bỏ qua các file trọng số (weights) và checkpoints vì chúng rất nặng
+*.h5
+*.hdf5
+*.ckpt
+*.pb
+*.weight
+saved_model/
+checkpoints/
+training_environment/checkpoints/
+
+# Logs của TensorBoard trong quá trình train
+logs/
+tensorboard_logs/
+
+# File tạm của Jupyter Notebook
+.ipynb_checkpoints/
+
+# 3. Frontend (Node.js / React / Vue)
+# Thư mục chứa thư viện FE cực kỳ nặng, tuyệt đối không push
+frontend/node_modules/
+node_modules/
+
+# Các file build/dist khi đóng gói Frontend
+frontend/build/
+frontend/dist/
+frontend/.next/
+frontend/out/
+
+# Logs của npm/yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Biến môi trường của FE
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# 4. Báo cáo (LaTeX)
+# Bỏ qua các file rác sinh ra trong quá trình biên dịch file main.tex
+*.aux
+*.bbl
+*.blg
+*.brf
+*.idx
+*.ilg
+*.ind
+*.lof
+*.log
+*.lot
+*.out
+*.toc
+*.synctex.gz
+*.fdb_latexmk
+*.fls
+report/*.pdf  # (Tùy chọn) Bỏ qua file PDF nếu bạn chỉ muốn lưu mã nguồn LaTeX
+
+# 5. Hệ điều hành & IDE (Code Editors)
+# Windows / Mac OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Cấu hình của VS Code, PyCharm, v.v.
+.vscode/
+.idea/
+*.swp
+*.swo
