@@ -29,4 +29,10 @@ class PositionalEmbedding(tf.keras.layers.Layer):
         x*=tf.math.sqrt(tf.cast(self.d_model,tf.float32))
         x=x+self.pos_encoding[:,:length,:]
         return x
-        
+
+
+def point_wise_feed_forward_network(d_model,dff):
+    return tf.keras.Sequential([
+        tf.keras.layers.Dense(dff,activation='relu'),
+        tf.keras.layers.Dense(d_model)
+    ])
