@@ -36,3 +36,7 @@ def point_wise_feed_forward_network(d_model,dff):
         tf.keras.layers.Dense(dff,activation='relu'),
         tf.keras.layers.Dense(d_model)
     ])
+    
+def create_look_ahead_mask(size):
+    mask=tf.linalg.band_part(tf.ones((size,size)),-1,0)
+    return mask

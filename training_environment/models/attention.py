@@ -8,7 +8,11 @@ def scaled_dot_product_attention(q,k,v,mask=None):
     if mask is not None:
         mask_float=tf.cast(mask,dtype=tf.float32)
         inverted_mask=1.0-mask_float
-        inverted_mask=inverted_mask[:,tf.newaxis,tf.newaxis,:]
+        if len(mask.shape) == 2:
+            inverted_mask = inverted_mask[:, tf.newaxis, tf.newaxis, :]
+            
+        elif len(mask.shape) == 3:
+            inverted_mask = inverted_mask[:, tf.newaxis, :, :]
         scaled_attention_logits+=(inverted_mask*-1e9)
     
     attention_weights=tf.nn.softmax(scaled_attention_logits,axis=-1)
