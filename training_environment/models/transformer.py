@@ -1,0 +1,43 @@
+import tensorflow as tf
+from models.encoder import Encoder
+from models.decoder import Decoder
+
+class Transformer(tf.keras.layers.Layer):
+    def __init__(self,num_layers,d_model,num_heads,dff,input_vocab_size,tgt_vocab_size,rate=0.1):
+        super().__init__()
+        
+        self.encoder=Encoder(
+            num_layers=num_layers,
+            d_model=d_model,
+            num_heads=num_heads,
+            dff=dff,
+            vocab_size=input_vocab_size,
+            rate=rate
+        )
+        
+        self.decoder=Decoder(
+            num_layers=num_layers,
+            d_model=d_model,
+            num_heads=num_heads,
+            dff=dff,
+            vocab_size=tgt_vocab_size,
+            rate=rate
+        )
+        
+        self.final_layer=tf.keras.layers.Dense(units=tgt_vocab_size)
+        
+    def call(self,inputs,training=False):
+        inp,tar=inputs
+        
+        enc_padding_mask=self.encoder.pos_embedding.compute_mask(inp)
+        enc_padding_mask = tf.cast(enc_padding_mask, tf.float32)
+        
+        enc_output=self.encoder(inp)
+        
+        dec_output=self.decoder(
+            x=tar,enc_output=enc_output,enc_padding_mask=enc_padding_mask,training=training
+        )
+        
+        final_output=self.final_layer(dec_output)
+        
+        return final_output
