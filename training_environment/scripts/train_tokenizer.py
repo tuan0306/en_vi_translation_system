@@ -7,7 +7,7 @@ def train_spm(input_file, model_prefix, vocab_size):
         input=input_file,
         model_prefix=model_prefix,
         vocab_size=vocab_size,
-        model_type='bpe',
+        model_type='unigram',
         character_coverage=0.9995,
         pad_id=0,
         unk_id=1,

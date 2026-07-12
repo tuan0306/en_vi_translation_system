@@ -34,14 +34,15 @@ class TranslationDataset:
         vi_real = vi[:, 1:]
         return (en, vi_inp), vi_real
     
-    def create_dataset(self,tfrecord_file):
+    def create_dataset(self,tfrecord_file, shuffle=False):
         dataset=tf.data.TFRecordDataset(tfrecord_file)
         
         dataset = dataset.map(self.parse_tfrecord, num_parallel_calls=tf.data.AUTOTUNE)
         
         dataset=dataset.filter(self.filter_length)
-
-        dataset=dataset.shuffle(buffer_size=20000)
+        
+        if shuffle:
+            dataset=dataset.shuffle(buffer_size=20000)
         
         boundaries=[10,20,30,40]
         batch_sizes=[self.batch_size]*(len(boundaries)+1)
