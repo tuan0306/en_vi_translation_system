@@ -104,7 +104,7 @@ def main():
         tgt_vocab_size=TARGET_VOCAB_SIZE
     )
     
-    learning_rate=CustomSchedule(d_model=args.d_model)
+    learning_rate=CustomSchedule(d_model=args.d_model, warmup_steps=16000)
     optimizer=tf.keras.optimizers.Adam(
         learning_rate=learning_rate,
         beta_1=0.9, 

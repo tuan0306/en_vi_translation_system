@@ -19,19 +19,22 @@ class DecoderLayer(tf.keras.layers.Layer):
         self.dropout3=tf.keras.layers.Dropout(rate=rate)
         
     def call(self, x, enc_output, training, decoder_self_attention_mask, padding_mask):
-        attn1, attn_weights_block1=self.mha1(x,x,x,mask=decoder_self_attention_mask)
-        attn1=self.dropout1(attn1,training=training)
-        out1=self.layernorm1(attn1+x)
+        x_norm = self.layernorm1(x)
+        attn1, attn_weights_block1 = self.mha1(x_norm, x_norm, x_norm, mask=decoder_self_attention_mask)
+        attn1 = self.dropout1(attn1, training=training)
+        x = x + attn1
         
-        attn2, attn_weights_block2=self.mha2(out1,enc_output,enc_output,mask=padding_mask)
-        attn2=self.dropout2(attn2,training=training)
-        out2=self.layernorm2(attn2+out1)
+        x_norm = self.layernorm2(x)
+        attn2, attn_weights_block2 = self.mha2(x_norm, enc_output, enc_output, mask=padding_mask)
+        attn2 = self.dropout2(attn2, training=training)
+        x = x + attn2
         
-        ffn_output=self.ffn(out2)
-        ffn_output=self.dropout3(ffn_output,training=training)
-        out3=self.layernorm3(ffn_output+out2)
+        x_norm = self.layernorm3(x)
+        ffn_output = self.ffn(x_norm)
+        ffn_output = self.dropout3(ffn_output, training=training)
+        x = x + ffn_output
         
-        return out3,attn_weights_block1,attn_weights_block2
+        return x, attn_weights_block1, attn_weights_block2
     
 class Decoder(tf.keras.layers.Layer):
     def __init__(self, num_layers, d_model, num_heads, dff, vocab_size, rate=0.1):
@@ -47,6 +50,7 @@ class Decoder(tf.keras.layers.Layer):
         ])
         
         self.dropout = tf.keras.layers.Dropout(rate)
+        self.final_layernorm = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         
     def call(self, x, enc_output,enc_padding_mask, training=False):
         tgt_padding_mask=self.pos_embedding.compute_mask(x)
@@ -68,4 +72,4 @@ class Decoder(tf.keras.layers.Layer):
                 decoder_self_attention_mask=decoder_self_attention_mask,
                 padding_mask=enc_padding_mask
             )
-        return x
+        return self.final_layernorm(x)

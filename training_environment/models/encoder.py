@@ -15,15 +15,17 @@ class EncoderLayer(tf.keras.layers.Layer):
         self.dropout2=tf.keras.layers.Dropout(rate=rate)
         
     def call(self, x, training, mask=None):
-        attn_output,_=self.mha(x,x,x,mask)
-        attn_output=self.dropout1(attn_output,training=training)
-        out1=self.layernorm1(attn_output+x)
+        x_norm = self.layernorm1(x)
+        attn_output,_ = self.mha(x_norm, x_norm, x_norm, mask)
+        attn_output = self.dropout1(attn_output, training=training)
+        x = x + attn_output
         
-        ffn_output=self.ffn(out1)
-        ffn_output=self.dropout2(ffn_output,training=training)
-        out2 = self.layernorm2(ffn_output + out1)
+        x_norm = self.layernorm2(x)
+        ffn_output = self.ffn(x_norm)
+        ffn_output = self.dropout2(ffn_output, training=training)
+        x = x + ffn_output
         
-        return out2
+        return x
     
 
 class Encoder(tf.keras.layers.Layer):
@@ -40,6 +42,7 @@ class Encoder(tf.keras.layers.Layer):
         ]
         
         self.dropout = tf.keras.layers.Dropout(rate)
+        self.final_layernorm = tf.keras.layers.LayerNormalization(epsilon=1e-6)
         
     def call(self,x,training=False):
         padding_mask=self.pos_embedding.compute_mask(x)
@@ -48,4 +51,4 @@ class Encoder(tf.keras.layers.Layer):
         
         for i in range(self.num_layers):
             x=self.enc_layers[i](x,training=training,mask=padding_mask)
-        return x
+        return self.final_layernorm(x)

@@ -44,16 +44,16 @@ class TranslationDataset:
         if shuffle:
             dataset=dataset.shuffle(buffer_size=20000)
         
-        boundaries=[10,20,30,40]
+        boundaries=[10,20,30,40,50,70]
         batch_sizes=[self.batch_size]*(len(boundaries)+1)
         
         dataset=dataset.bucket_by_sequence_length(
             element_length_func=lambda en,vi: tf.maximum(tf.size(en),tf.size(vi)),
             bucket_boundaries=boundaries,
             bucket_batch_sizes=batch_sizes,
-            #padded_shapes=([None],[None]),
-            padded_shapes=([self.max_length],[self.max_length]),
-            padding_values=(0,0)
+            padded_shapes=([None],[None]),
+            padding_values=(0,0),
+            pad_to_bucket_boundary=True
         )
 
         dataset = dataset.map(self.split_target, num_parallel_calls=tf.data.AUTOTUNE)
