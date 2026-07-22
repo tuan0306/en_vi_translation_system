@@ -3,6 +3,7 @@ import os
 import yaml
 import sentencepiece as spm
 import sys
+import numpy as np
 
 sys.path.append(os.path.abspath('training_environment'))
 from models.transformer import Transformer
@@ -38,27 +39,62 @@ class Translator():
         else:
             print(f"Không tìm thấy file trọng số tại '{checkpoint_path}'!")
     
-    def translate(self,text):
-        en_ids=[BOS_ID]+self.sp_en.encode(text,out_type=int)+[EOS_ID]
-        en_inp=tf.expand_dims(tf.convert_to_tensor(en_ids,dtype=tf.int32),0)
-
-        decoder_inp=[BOS_ID]
-        output=tf.expand_dims(decoder_inp,0)
-
+    def beam_search_decode(self, en_inp, beam_width=4, len_penalty_alpha=0.6):
+        beams = [([BOS_ID], 0.0, False)]
+        
         for _ in range(self.config["MAX_LENGTH"]):
-            predictions=self.model((en_inp,output),training=False)
-            predictions=predictions[:,-1:,:]
-            predicted_id=tf.cast(tf.argmax(predictions,axis=-1),tf.int32)
-
-            if predicted_id[0,0]==EOS_ID:
+            candidates = []
+            all_finished = True
+            
+            for seq, log_prob, finished in beams:
+                if finished:
+                    candidates.append((seq, log_prob, True))
+                    continue
+                
+                all_finished = False
+                
+                output_tensor = tf.expand_dims(tf.constant(seq, dtype=tf.int32), 0)
+                predictions = self.model((en_inp, output_tensor), training=False)
+                predictions = predictions[0, -1, :]
+                
+                log_probs = tf.nn.log_softmax(predictions).numpy()
+                
+                top_indices = np.argsort(log_probs)[-beam_width:]
+                for idx in top_indices:
+                    idx = int(idx)
+                    new_seq = seq + [idx]
+                    new_log_prob = log_prob + log_probs[idx]
+                    is_eos = (idx == EOS_ID)
+                    candidates.append((new_seq, new_log_prob, is_eos))
+                    
+            if all_finished:
                 break
+                
+            scored_candidates = []
+            for seq, log_prob, finished in candidates:
+                seq_len = len(seq) - 1
+                penalty = ((5.0 + seq_len) ** len_penalty_alpha) / ((5.0 + 1.0) ** len_penalty_alpha)
+                score = log_prob / penalty
+                scored_candidates.append((score, seq, log_prob, finished))
+                
+            scored_candidates.sort(key=lambda x: x[0], reverse=True)
+            beams = []
+            for score, seq, log_prob, finished in scored_candidates[:beam_width]:
+                beams.append((seq, log_prob, finished))
+                
+        finished_beams = [b for b in beams if b[2] or b[0][-1] == EOS_ID]
+        best_beam = finished_beams[0] if finished_beams else beams[0]
+        
+        best_seq = best_beam[0]
+        result_ids = [t for t in best_seq if t not in [BOS_ID, EOS_ID]]
+        return result_ids
 
-            output=tf.concat([output,predicted_id],axis=-1)
-
-        raw_ids = tf.squeeze(output, axis=0)[1:].numpy().tolist()
-        vi_ids = [t for t in raw_ids if t not in [PAD_ID, BOS_ID, EOS_ID]]
-
-        translated_text=self.sp_vi.decode(vi_ids)
+    def translate(self, text):
+        en_ids = [BOS_ID] + self.sp_en.encode(text, out_type=int) + [EOS_ID]
+        en_inp = tf.expand_dims(tf.convert_to_tensor(en_ids, dtype=tf.int32), 0)
+        
+        vi_ids = self.beam_search_decode(en_inp, beam_width=4, len_penalty_alpha=0.6)
+        translated_text = self.sp_vi.decode(vi_ids)
         return translated_text
 
 translator=Translator(
