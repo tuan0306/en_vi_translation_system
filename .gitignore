@@ -22,6 +22,7 @@ backend/ml_service/data/
 *.ckpt
 *.pb
 *.weight
+*.onnx
 saved_model/
 checkpoints/
 training_environment/checkpoints/
@@ -88,3 +89,6 @@ Desktop.ini
 .idea/
 *.swp
 *.swo
+
+# Bỏ qua thư mục chứa mô hình và tokenizer tải về ở backend
+backend/models/

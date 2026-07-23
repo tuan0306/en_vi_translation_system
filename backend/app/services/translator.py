@@ -63,9 +63,7 @@ class TranslatorService:
                 
                 all_finished = False
                 
-                # ONNX yêu cầu kích thước decoder_input cố định là (1, max_length - 1)
-                dec_ids = seq + [PAD_ID] * (self.max_length - 1 - len(seq))
-                decoder_input = np.array([dec_ids], dtype=np.int32)
+                decoder_input = np.array([seq], dtype=np.int32)
                 
                 # Chạy mô hình qua ONNX session
                 outputs = self.session.run(
@@ -123,12 +121,6 @@ class TranslatorService:
             raise RuntimeError("Mô hình chưa được tải")
 
         en_ids=[BOS_ID]+self.sp_en.encode(text,out_type=int)+[EOS_ID]
-        if len(en_ids)<self.max_length:
-            en_ids=en_ids+[PAD_ID]*(self.max_length-len(en_ids))
-        else:
-            en_ids=en_ids[:self.max_length]
-            en_ids[-1]=EOS_ID
-        
         encoder_input=np.array([en_ids],dtype=np.int32)
 
         vi_ids=self.beam_search_decode(encoder_input,beam_width=settings.BEAM_WIDTH,len_penalty_alpha=settings.LEN_PENALTY_ALPHA)

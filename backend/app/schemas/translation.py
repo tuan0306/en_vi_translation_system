@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime
 
 class TranslationRequest(BaseModel):
-    text: str= Field(...,min_length=1,max_length=300,
+    text: str= Field(...,min_length=1,
     description="Đoạn văn bản Tiếng Anh cần dịch sang Tiếng Việt.",
     examples=["Hello, welcome to my machine translation"])
 
