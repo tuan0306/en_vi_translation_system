@@ -1,0 +1,8 @@
+# Công cụ chạy các kịch bản kiểm thử tự động
+pytest>=7.4.0
+
+# Công cụ giúp mô phỏng request gọi API
+httpx>=0.24.1
+
+# Kiểm tra lỗi cú pháp và chuẩn code
+flake8>=6.1.0
