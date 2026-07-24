@@ -1,0 +1,49 @@
+name: MLOps CD Pipeline
+
+on:
+  workflow_run:
+    workflows: ["MLOps CI Pipeline"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  build-and-publish:
+    # Nếu CI báo đỏ failed, luồng CD này sẽ tự động huỷ bỏ.
+    if: ${{ github.event.workflow_run.conclusion == 'success'}}
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Tải mã nguồn về máy ảo
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            backend
+            frontend
+          sparse-checkout-cone-mode: false
+
+      - name: Đăng nhập vào kho GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        
+      - name: Đóng gói và Phân phối BE
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/${{ github.repository }}/en-vi-backend:latest
+
+      - name: Đóng gói và Phân phối FE  
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ghcr.io/${{ github.repository }}/en-vi-frontend:latest
