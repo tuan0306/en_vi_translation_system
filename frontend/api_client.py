@@ -1,11 +1,17 @@
 from requests import request
 import os
+import yaml
 import requests
-from dotenv import load_dotenv
 
-load_dotenv()
+def load_yaml_config():
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "config.yaml"), "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except Exception:
+        return {}
 
-BACKEND_API_URL = os.getenv("BACKEND_API_URL", "http://127.0.0.1:8000")
+config = load_yaml_config()
+BACKEND_API_URL = os.getenv("BACKEND_API_URL", config.get("backend_api_url", "http://127.0.0.1:8000"))
 
 class TranslationAPIClient:
     def __init__(self):
@@ -25,7 +31,7 @@ class TranslationAPIClient:
         payload = {"text": text}
         
         try:
-            response = requests.post(url, json=payload, timeout=60)
+            response = requests.post(url, json=payload, timeout=90)
             if response.status_code == 200:
                 data = response.json()
                 return {

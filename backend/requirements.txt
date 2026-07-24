@@ -6,3 +6,4 @@ sentencepiece>=0.1.99
 huggingface_hub>=0.16.0
 python-dotenv>=1.0.0
 numpy>=1.23.0
+PyYAML>=6.0

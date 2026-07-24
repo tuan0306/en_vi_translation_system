@@ -13,7 +13,7 @@ services:
     networks:
       - translate_net
 
-  fontend:
+  frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
