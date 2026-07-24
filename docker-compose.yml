@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:7860" # Map cổng 7860 của container ra cổng 8000 của máy local
+    volumes:
+      # Đồng bộ thư mục chứa models để không phải tải lại model nặng khi tắt/mở container
+      - ./backend/models:/home/user/app/models
+    networks:
+      - translate_net
+
+  fontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8501:7860"
+    environment:
+      - BACKEND_API_URL=http://backend:7860
+    depends_on:
+      - backend
+    networks:
+      - translate_net
+
+networks:
+  translate_net:
+    driver: bridge
