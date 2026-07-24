@@ -53,4 +53,4 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Thử nghiệm build toàn bộ hệ thống
-        run: docker-compose build
+        run: docker compose build
