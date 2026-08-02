@@ -59,7 +59,7 @@ This system is powered by a custom-trained neural machine translation model, spe
 - **Data Size**:
   - **Raw Corpus**: 400,000 parallel sentence pairs.
   - **Filtered TFRecord**: High-yield parallel training pairs after excluding sentences exceeding `max_length = 100`.
-- **Tokenization**: Subword tokenization using **SentencePiece** (Unigram model, vocabulary size of **16,000** for both English and Vietnamese) to handle out-of-vocabulary (OOV) words and complex Vietnamese syntax effectively.
+- **Tokenization**: Subword tokenization using **SentencePiece** (Unigram model, vocabulary size of **32,000** for both English and Vietnamese) to handle out-of-vocabulary (OOV) words and complex Vietnamese syntax effectively.
 
 ### Performance & Evaluation
 - **Translation Quality (BLEU Scores)**: Evaluated using **Vectorized Batch Beam Search Decoding** (beam_width=5, len_penalty_alpha=0.8, evaluated in `evaluate.ipynb`):
