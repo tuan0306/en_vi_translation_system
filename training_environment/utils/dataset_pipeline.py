@@ -2,7 +2,7 @@ import tensorflow as tf
 import sentencepiece as spm
 
 class TranslationDataset:
-    def __init__(self,max_length=64,batch_size=64):
+    def __init__(self,max_length=100,batch_size=48):
         self.max_length=max_length
         self.batch_size=batch_size
         self.START = tf.constant([2], dtype=tf.int32)
@@ -36,15 +36,15 @@ class TranslationDataset:
     
     def create_dataset(self,tfrecord_file, shuffle=False):
         dataset=tf.data.TFRecordDataset(tfrecord_file)
+
+        if shuffle:
+            dataset=dataset.shuffle(buffer_size=20000)
         
         dataset = dataset.map(self.parse_tfrecord, num_parallel_calls=tf.data.AUTOTUNE)
         
         dataset=dataset.filter(self.filter_length)
         
-        if shuffle:
-            dataset=dataset.shuffle(buffer_size=20000)
-        
-        boundaries=[10,20,30,40,50,70]
+        boundaries = [15, 25, 35, 50, 65, 80, 105]
         batch_sizes=[self.batch_size]*(len(boundaries)+1)
         
         dataset=dataset.bucket_by_sequence_length(

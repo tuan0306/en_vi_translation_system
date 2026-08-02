@@ -38,54 +38,66 @@ class Translator():
             print(f"Tải thành công trọng số tại: {checkpoint_path}")
         else:
             print(f"Không tìm thấy file trọng số tại '{checkpoint_path}'!")
-    
+
     def beam_search_decode(self, en_inp, beam_width=4, len_penalty_alpha=0.6):
-        beams = [([BOS_ID], 0.0, False)]
+        def calc_length_penalty(seq_len):
+            return ((5.0 + seq_len) ** len_penalty_alpha) / (6.0 ** len_penalty_alpha)
+
+        completed_beams = []
+        active_beams = [([BOS_ID], 0.0)]
         
         for _ in range(self.config["MAX_LENGTH"]):
-            candidates = []
-            all_finished = True
+            if not active_beams or len(completed_beams) >= beam_width:
+                break
+                
+            # Gom tất cả active beams thành 1 batch duy nhất
+            active_seqs = [b[0] for b in active_beams]
+            output_tensor_batch = tf.constant(active_seqs, dtype=tf.int32)
+            en_inp_batch = tf.tile(en_inp, [len(active_beams), 1])
             
-            for seq, log_prob, finished in beams:
-                if finished:
-                    candidates.append((seq, log_prob, True))
-                    continue
-                
-                all_finished = False
-                
-                output_tensor = tf.expand_dims(tf.constant(seq, dtype=tf.int32), 0)
-                predictions = self.model((en_inp, output_tensor), training=False)
-                predictions = predictions[0, -1, :]
-                
-                log_probs = tf.nn.log_softmax(predictions).numpy()
-                
+            # Chạy model cho toàn bộ active beams
+            predictions = self.model((en_inp_batch, output_tensor_batch), training=False)
+            
+            # Lấy predictions tại vị trí token cuối cùng: shape (num_active, vocab_size)
+            last_token_preds = predictions[:, -1, :]
+            log_probs_batch = tf.nn.log_softmax(last_token_preds).numpy()
+            
+            next_active_candidates = []
+            
+            for i, (seq, current_log_prob) in enumerate(active_beams):
+                log_probs = log_probs_batch[i]
                 top_indices = np.argsort(log_probs)[-beam_width:]
+                
                 for idx in top_indices:
                     idx = int(idx)
                     new_seq = seq + [idx]
-                    new_log_prob = log_prob + log_probs[idx]
-                    is_eos = (idx == EOS_ID)
-                    candidates.append((new_seq, new_log_prob, is_eos))
+                    new_log_prob = current_log_prob + log_probs[idx]
                     
-            if all_finished:
+                    if idx == EOS_ID:
+                        seq_len = len(new_seq) - 1
+                        score = new_log_prob / calc_length_penalty(seq_len)
+                        completed_beams.append((score, new_seq))
+                    else:
+                        next_active_candidates.append((new_seq, new_log_prob))
+            
+            if not next_active_candidates:
                 break
-                
-            scored_candidates = []
-            for seq, log_prob, finished in candidates:
+
+            next_active_candidates.sort(key=lambda x: x[1], reverse=True)
+            active_beams = next_active_candidates[:beam_width]
+
+        if completed_beams:
+            completed_beams.sort(key=lambda x: x[0], reverse=True)
+            best_seq = completed_beams[0][1]
+        else:
+            scored_active = []
+            for seq, log_prob in active_beams:
                 seq_len = len(seq) - 1
-                penalty = ((5.0 + seq_len) ** len_penalty_alpha) / ((5.0 + 1.0) ** len_penalty_alpha)
-                score = log_prob / penalty
-                scored_candidates.append((score, seq, log_prob, finished))
-                
-            scored_candidates.sort(key=lambda x: x[0], reverse=True)
-            beams = []
-            for score, seq, log_prob, finished in scored_candidates[:beam_width]:
-                beams.append((seq, log_prob, finished))
-                
-        finished_beams = [b for b in beams if b[2] or b[0][-1] == EOS_ID]
-        best_beam = finished_beams[0] if finished_beams else beams[0]
+                score = log_prob / calc_length_penalty(seq_len)
+                scored_active.append((score, seq))
+            scored_active.sort(key=lambda x: x[0], reverse=True)
+            best_seq = scored_active[0][1]
         
-        best_seq = best_beam[0]
         result_ids = [t for t in best_seq if t not in [BOS_ID, EOS_ID]]
         return result_ids
 

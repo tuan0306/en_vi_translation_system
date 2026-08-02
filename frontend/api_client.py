@@ -21,7 +21,10 @@ class TranslationAPIClient:
         try:
             response = requests.get(f"{self.base_url}/health", timeout=5)
             if response.status_code == 200:
-                return response.json()
+                try:
+                    return response.json()
+                except Exception:
+                    return {"status": "unhealthy", "model_loaded": False}
             return {"status": "unhealthy", "model_loaded": False}
         except requests.exceptions.RequestException:
             return {"status": "offline", "model_loaded": False}
@@ -31,23 +34,32 @@ class TranslationAPIClient:
         payload = {"text": text}
         
         try:
-            response = requests.post(url, json=payload, timeout=90)
+            response = requests.post(url, json=payload, timeout=120)
             if response.status_code == 200:
-                data = response.json()
-                return {
-                    "success": True,
-                    "translated_text": data.get("translated_text", ""),
-                    "latency_seconds": data.get("latency_seconds", 0.0),
-                    "cached": data.get("cached", False),
-                    "error": None
-                }
+                try:
+                    data = response.json()
+                    return {
+                        "success": True,
+                        "translated_text": data.get("translated_text", ""),
+                        "latency_seconds": data.get("latency_seconds", 0.0),
+                        "cached": data.get("cached", False),
+                        "error": None
+                    }
+                except Exception:
+                    return {
+                        "success": False,
+                        "error": "Phản hồi kết quả dịch từ máy chủ không đúng định dạng JSON"
+                    }
             elif response.status_code == 503:
                 return {
                     "success": False,
                     "error": "Mô hình dịch đang được khởi động. Vui lòng thử lại sau"
                 }
             else:
-                error_msg = response.json().get("detail", "Lỗi hệ thống Backend")
+                try:
+                    error_msg = response.json().get("detail", f"Lỗi máy chủ (HTTP {response.status_code})")
+                except Exception:
+                    error_msg = f"Máy chủ phản hồi lỗi (HTTP {response.status_code})"
                 return {
                     "success": False,
                     "error": error_msg
@@ -60,7 +72,7 @@ class TranslationAPIClient:
         except requests.exceptions.ConnectionError:
             return {
                 "success": False,
-                "error": "Không thể kết nối tới máy chủ"
+                "error": "Không thể kết nối tới máy chủ API"
             }
         except Exception as e:
             return {

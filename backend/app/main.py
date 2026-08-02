@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.schemas.translation import TranslationRequest, TranslationRespone
 from app.services.translator import translator_service
+from cachetools import TTLCache
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,8 +32,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Simple in-memory cache
-translation_cache = {}
+# In-memory cache với chiến lược LRU (tối đa 2.000 mục, hết hạn sau 24h) chống tràn RAM
+translation_cache = TTLCache(maxsize=2000, ttl=86400)
 
 @app.get("/health",status_code=status.HTTP_200_OK,tags=["System"])
 async def health_check():

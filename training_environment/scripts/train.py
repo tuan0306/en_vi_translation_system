@@ -5,16 +5,14 @@ from utils.dataset_pipeline import TranslationDataset
 import argparse
 import yaml
 import os
-import json
 import sentencepiece as spm
 import pandas as pd
+import functools
 
 EN_SPM_PATH = 'data/tokenizer/spm_en.model'
 VI_SPM_PATH = 'data/tokenizer/spm_vi.model'
 TRAIN_TFRECORD = 'data/train.tfrecord'
 VAL_TFRECORD = 'data/val.tfrecord'
-
-TOTAL_TRAINING_SAMPLES = 389056
 
 def smart_resume_training(checkpoint_path, latest_checkpoint_path, history_path):
     initial_epoch = 0
@@ -101,20 +99,25 @@ def main():
         d_model=args.d_model,
         dff=args.dff,
         input_vocab_size=INPUT_VOCAB_SIZE,
-        tgt_vocab_size=TARGET_VOCAB_SIZE
+        tgt_vocab_size=TARGET_VOCAB_SIZE,
+        rate=config["DROPOUT"]
     )
     
-    learning_rate=CustomSchedule(d_model=args.d_model, warmup_steps=16000)
-    optimizer=tf.keras.optimizers.Adam(
+    learning_rate=CustomSchedule(d_model=args.d_model, warmup_steps=config["WARMUP_STEPS"])
+    optimizer=tf.keras.optimizers.AdamW(
         learning_rate=learning_rate,
+        weight_decay=1e-4,
         beta_1=0.9, 
         beta_2=0.98, 
         epsilon=1e-9
     )
+
+    smoothing=config["LABEL_SMOOTHING"]
+    loss_fn = functools.partial(masked_loss, smoothing=smoothing)
     
     transformer.compile(
         optimizer=optimizer,
-        loss=masked_loss,
+        loss=loss_fn,
         metrics=[masked_accuracy]
     )
     
@@ -125,18 +128,19 @@ def main():
         transformer.load_weights(checkpoint_to_load)
         print(f"Đã load thành công trọng số từ: {checkpoint_to_load}")
         
-    steps_per_epoch = TOTAL_TRAINING_SAMPLES // args.batch_size
+    steps_per_epoch = config["STEPS_PER_EPOCH"]
     total_steps_run = initial_epoch * steps_per_epoch
     transformer.optimizer.iterations.assign(total_steps_run)
     print(f"Khởi tạo optimizer iterations ở step: {total_steps_run} (Epoch: {initial_epoch}, Steps/Epoch: {steps_per_epoch})")
         
     early_stopping = tf.keras.callbacks.EarlyStopping(
         monitor='val_loss',
-        patience=5,
-        min_delta=0.001,
+        patience=10,
+        min_delta=0,
         restore_best_weights=True,
         verbose=1
     )
+    early_stopping.best=best_val_loss
     
     # Checkpoint lưu weights có loss tốt nhất
     model_checkpoint = tf.keras.callbacks.ModelCheckpoint(

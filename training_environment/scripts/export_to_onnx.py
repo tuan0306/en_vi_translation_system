@@ -41,10 +41,6 @@ def export_model_to_onnx():
         print("Lỗi: Không tìm thấy file trọng số.")
         return
 
-    # @tf.function(input_signature=[
-    #     tf.TensorSpec(shape=[None, max_length], dtype=tf.int32, name="encoder_input"),
-    #     tf.TensorSpec(shape=[None, max_length - 1], dtype=tf.int32, name="decoder_input")
-    # ])
     @tf.function(input_signature=[
         tf.TensorSpec(shape=[None, None], dtype=tf.int32, name="encoder_input"),
         tf.TensorSpec(shape=[None, None], dtype=tf.int32, name="decoder_input")

@@ -32,7 +32,7 @@ class TranslatorService:
         self.sp_en=spm.SentencePieceProcessor(model_file=paths["sp_en"])
         self.sp_vi=spm.SentencePieceProcessor(model_file=paths["sp_vi"])
 
-        sess_options=ort.SessionOptions() # các luật lệ của ONNX Rentime
+        sess_options=ort.SessionOptions() # các luật lệ của ONNX Runtime
         sess_options.intra_op_num_threads=2 # số luồng trong 1 phép toán
         sess_options.execution_mode=ort.ExecutionMode.ORT_SEQUENTIAL # xử lí tuần tự từng lớp
 
@@ -49,70 +49,74 @@ class TranslatorService:
         return self.session is not None and self.sp_en is not None and self.sp_vi is not None
 
     def beam_search_decode(self, encoder_input, beam_width=4, len_penalty_alpha=0.6):
-        # Mỗi phần tử trong beams gồm: (danh_sách_tokens, tổng_log_prob, trạng_thái_kết_thúc)
-        beams = [([BOS_ID], 0.0, False)]
+        def calc_length_penalty(seq_len):
+            return ((5.0 + seq_len) ** len_penalty_alpha) / (6.0 ** len_penalty_alpha)
+
+        # lưu danh sách: (score, seq)
+        completed_beams = []
+        # lưu danh sách: (seq, log_prob)
+        active_beams = [([BOS_ID], 0.0)]
         
         for _ in range(self.max_length):
-            candidates = []
-            all_finished = True
+            if not active_beams or len(completed_beams) >= beam_width:
+                break
+                
+            # Gom tất cả active beams thành 1 batch 
+            active_seqs = [b[0] for b in active_beams]
+            decoder_input_batch = np.array(active_seqs, dtype=np.int32)
+            encoder_input_batch = np.repeat(encoder_input, len(active_beams), axis=0)
             
-            for seq, log_prob, finished in beams:
-                if finished:
-                    candidates.append((seq, log_prob, True))
-                    continue
-                
-                all_finished = False
-                
-                decoder_input = np.array([seq], dtype=np.int32)
-                
-                # Chạy mô hình qua ONNX session
-                outputs = self.session.run(
-                    None, 
-                    {
-                        "encoder_input": encoder_input,
-                        "decoder_input": decoder_input
-                    }
-                )
-                
-                # Lấy dự đoán logits của token cuối cùng trong chuỗi hiện tại
-                predictions = outputs[0][0, len(seq) - 1, :]
-                
-                # Áp dụng Log Softmax
-                log_probs = log_softmax(predictions)
-                
-                # Lấy ra beam_width chỉ số tốt nhất
+            # Chạy ONNX session cho toàn bộ active beams
+            outputs = self.session.run(
+                None, 
+                {
+                    "encoder_input": encoder_input_batch,
+                    "decoder_input": decoder_input_batch
+                }
+            )
+            
+            # Lấy dự đoán logits của token cuối cùng cho mỗi active beam: shape (num_active, vocab_size)
+            last_token_logits = outputs[0][:, -1, :]
+            log_probs_batch = log_softmax(last_token_logits)
+            
+            next_active_candidates = []
+            
+            for i, (seq, current_log_prob) in enumerate(active_beams):
+                log_probs = log_probs_batch[i]
                 top_indices = np.argsort(log_probs)[-beam_width:]
+                
                 for idx in top_indices:
                     idx = int(idx)
                     new_seq = seq + [idx]
-                    new_log_prob = log_prob + log_probs[idx]
-                    is_eos = (idx == EOS_ID)
-                    candidates.append((new_seq, new_log_prob, is_eos))
+                    new_log_prob = current_log_prob + log_probs[idx]
                     
-            if all_finished:
-                break
-                
-            # Áp dụng Length Penalty
-            scored_candidates = []
-            for seq, log_prob, finished in candidates:
-                seq_len = len(seq) - 1
-                penalty = ((5.0 + seq_len) ** len_penalty_alpha) / ((5.0 + 1.0) ** len_penalty_alpha)
-                score = log_prob / penalty
-                scored_candidates.append((score, seq, log_prob, finished))
-                
-            # Sắp xếp các ứng cử viên theo điểm số từ cao xuống thấp
-            scored_candidates.sort(key=lambda x: x[0], reverse=True)
+                    if idx == EOS_ID:
+                        seq_len = len(new_seq) - 1
+                        score = new_log_prob / calc_length_penalty(seq_len)
+                        completed_beams.append((score, new_seq))
+                    else:
+                        next_active_candidates.append((new_seq, new_log_prob))
             
-            # Giữ lại beam_width kết quả tốt nhất
-            beams = []
-            for score, seq, log_prob, finished in scored_candidates[:beam_width]:
-                beams.append((seq, log_prob, finished))
-                
-        # Lọc ra các beams đã gặp EOS_ID hoặc lấy beam tốt nhất
-        finished_beams = [b for b in beams if b[2] or b[0][-1] == EOS_ID]
-        best_beam = finished_beams[0] if finished_beams else beams[0]
+            if not next_active_candidates:
+                break
+
+            # Sắp xếp các active candidates theo log_prob để giữ lại top beam_width
+            next_active_candidates.sort(key=lambda x: x[1], reverse=True)
+            active_beams = next_active_candidates[:beam_width]
+
+        # Lấy kết quả hoàn chỉnh tốt nhất
+        if completed_beams:
+            completed_beams.sort(key=lambda x: x[0], reverse=True)
+            best_seq = completed_beams[0][1]
+        else:
+            scored_active = []
+            for seq, log_prob in active_beams:
+                seq_len = len(seq) - 1
+                score = log_prob / calc_length_penalty(seq_len)
+                scored_active.append((score, seq))
+            scored_active.sort(key=lambda x: x[0], reverse=True)
+            best_seq = scored_active[0][1]
         
-        best_seq = best_beam[0]
         result_ids = [t for t in best_seq if t not in [BOS_ID, EOS_ID]]
         return result_ids
 

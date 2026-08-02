@@ -33,7 +33,9 @@ class PositionalEmbedding(tf.keras.layers.Layer):
 
 def point_wise_feed_forward_network(d_model,dff):
     return tf.keras.Sequential([
-        tf.keras.layers.Dense(dff,activation='relu'),
+        tf.keras.layers.Dense(
+            dff, 
+            activation=lambda x: tf.keras.activations.gelu(x, approximate=True)),
         tf.keras.layers.Dense(d_model)
     ])
     

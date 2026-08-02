@@ -24,7 +24,12 @@ class Transformer(tf.keras.Model):
             rate=rate
         )
         
-        self.final_layer=tf.keras.layers.Dense(units=tgt_vocab_size)
+        self.output_bias=self.add_weight(
+            name="output_bias",
+            shape=(tgt_vocab_size,),
+            initializer='zeros',
+            trainable=True
+        )
         
     def call(self,inputs,training=False):
         inp,tar=inputs
@@ -37,7 +42,10 @@ class Transformer(tf.keras.Model):
         dec_output=self.decoder(
             x=tar,enc_output=enc_output,enc_padding_mask=enc_padding_mask,training=training
         )
+
+        embedding_matrix=self.decoder.pos_embedding.embedding.embeddings
+        final_output=tf.matmul(dec_output,embedding_matrix,transpose_b=True)
         
-        final_output=self.final_layer(dec_output)
+        final_output=final_output+self.output_bias
         
         return final_output

@@ -1,4 +1,4 @@
 hf_repo_id: "nddttt/en-vi-translation-model"
 max_length: 128
-beam_width: 4
-len_penalty_alpha: 0.6
+beam_width: 5
+len_penalty_alpha: 0.8

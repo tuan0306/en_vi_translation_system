@@ -20,15 +20,13 @@ A production-ready English-to-Vietnamese Machine Translation system powered by a
 ### 📸 Application Demo
 ![Application Demo](assets/demo.png)
 
-*Giao diện tương tác thực tế của Hệ thống Dịch thuật.*
-
-
 ## 🚀 Key Features
-- **Custom Sequence-to-Sequence Transformer**: Built with 6 Encoder/Decoder layers, 8 Attention Heads, and Pre-LN architecture, trained from scratch specifically for English-to-Vietnamese translation.
+- **Custom Sequence-to-Sequence Transformer**: Built with 6 Encoder/Decoder layers, 8 Attention Heads, GELU activations, Weight Tying (Tied Embeddings), and Pre-LN architecture, trained from scratch specifically for English-to-Vietnamese translation.
 - **Hugging Face Hub Integration**: Automated model distribution pipeline pulling the custom-trained ONNX model weights and SentencePiece tokenizers directly from the Hugging Face repository (`nddttt/en-vi-translation-model`).
-- **High-Performance Inference**: Optimized **ONNX (Open Neural Network Exchange)** serving with parallel Batch Beam Search (width=4) and Length Penalty ($\alpha=0.6$).
+- **High-Performance Vectorized Inference**: Optimized **ONNX (Open Neural Network Exchange)** serving with fully vectorized Batch Beam Search (width=5) and Length Penalty ($\alpha=0.8$).
+- **Smart In-Memory Caching**: FastAPI backend equipped with `TTLCache` (maxsize=2000 items, 24h TTL) to prevent memory leaks while accelerating response times for repeated translations.
 - **Microservices Architecture**: Decoupled FastAPI backend (for ONNX model inference) and Streamlit frontend (user UI) for independent scaling and maintenance.
-- **Fault-tolerant Networking**: Advanced retry mechanisms and Docker-based DNS resolution between services.
+- **Fault-tolerant Networking**: Advanced retry mechanisms, robust JSON error handling, and Docker-based DNS resolution between services.
 - **Full CI/CD Automation**: Zero-touch testing, linting, and Docker image delivery via GitHub Actions.
 
 ## 🧠 Core Machine Learning Model
@@ -36,33 +34,39 @@ This system is powered by a custom-trained neural machine translation model, spe
 
 ### Model Architecture
 - **Core Architecture**: Sequence-to-Sequence **Transformer** with Pre-Layer Normalization for fast convergence and stable gradients.
+- **Advanced Techniques**:
+  - **GELU Activation**: Uses Gaussian Error Linear Unit (GELU) in the Feed-Forward Network for smoother non-linear mapping compared to standard ReLU.
+  - **Weight Tying (Tied Embeddings)**: Shares weight matrices between the target decoder embeddings and final linear projection layer (with trainable output bias), reducing model parameters and improving semantic embedding quality.
 - **Hyperparameters**:
   - **Encoder/Decoder Layers**: 6 layers each
   - **Attention Heads**: 8 heads
   - **Embedding Dimension ($d_{model}$)**: 512
-  - **Feed-Forward Dimension ($d_{ff}$)**: 2048
-  - **Max Sequence Length**: 64 tokens (padded dynamically using bucket boundaries `[10, 20, 30, 40, 50, 70]` to eliminate memory leakage/OOM on GPU).
-  - **Optimizer**: Adam with custom schedule (16,000 warmup steps).
+  - **Feed-Forward Dimension ($d_{ff}$)**: 3072
+  - **Dropout Rate**: 0.15
+  - **Max Sequence Length**: 100 tokens (padded dynamically using bucket boundaries `[15, 25, 35, 50, 65, 80, 105]` to eliminate memory leakage/OOM on GPU).
+  - **Optimizer**: Adam with custom learning rate schedule (25,000 warmup steps).
+  - **Loss Function**: Masked Cross-Entropy with **Label Smoothing ($\epsilon = 0.1$)**.
 - **Model Components & Code Structure**:
   - **Positional Encoding (`layers.py`)**: Implements positional embeddings to incorporate sequence order details.
   - **Multi-Head Attention (`attention.py`)**: Core mechanism managing self-attention and cross-attention over 8 split heads.
   - **Encoder Stack (`encoder.py`)**: Stack of 6 Encoder layers incorporating Pre-Layer Normalization and residual connections for training stability.
   - **Decoder Stack (`decoder.py`)**: Stack of 6 Decoder layers with masked self-attention (to prevent future token leakage) and cross-attention over the encoder's output.
-  - **Model Wrapper (`transformer.py`)**: Integrates the Encoder and Decoder blocks into a single end-to-end translation model.
-- **Export Format**: The model is exported to **ONNX** format. This drastically reduces the model size and significantly boosts CPU inference speed compared to native PyTorch serving.
+  - **Model Wrapper (`transformer.py`)**: Integrates Encoder/Decoder blocks with Tied Embeddings and output projection bias into a single end-to-end model.
+- **Export Format**: Exported to **ONNX** format with dynamic tensor shapes `[None, None]` for both encoder and decoder inputs. This drastically reduces model size and significantly boosts CPU/GPU inference speed compared to native TensorFlow serving.
 
 ### Dataset & Preprocessing
 - **Training Data**: Trained on the public **PhoMT** dataset (`ura-hcmut/PhoMT` from Hugging Face Datasets), a high-quality, large-scale English-Vietnamese parallel corpus.
 - **Data Size**:
   - **Raw Corpus**: 400,000 parallel sentence pairs.
-  - **Filtered TFRecord**: **389,056 training pairs** (after excluding sentences exceeding `max_length = 64`).
+  - **Filtered TFRecord**: High-yield parallel training pairs after excluding sentences exceeding `max_length = 100`.
 - **Tokenization**: Subword tokenization using **SentencePiece** (Unigram model, vocabulary size of **16,000** for both English and Vietnamese) to handle out-of-vocabulary (OOV) words and complex Vietnamese syntax effectively.
 
 ### Performance & Evaluation
-- **Translation Quality (BLEU Scores)**: using **Batch Beam Search Decoding** (beam_width=4, len_penalty_alpha=0.6, evaluated in `evaluate.ipynb`):
-    - **BLEU-4 (12,800 test sentences)**: **18.76** / 100 (completed in parallel on Tesla T4 GPU)
-    - **BLEU-4 (640 test sentences)**: **19.97** / 100
-- **Inference Speed**: Highly optimized generation using parallel Batch Beam Search (Width=4, Length Penalty $\alpha = 0.6$), achieving real-time translation with average latency of `< 200ms` per sentence on a standard CPU (running via ONNX Runtime in production) and less than 15 seconds for an entire batch of 64 sentences on GPU.
+- **Translation Quality (BLEU Scores)**: Evaluated using **Vectorized Batch Beam Search Decoding** (beam_width=5, len_penalty_alpha=0.8, evaluated in `evaluate.ipynb`):
+    - **BLEU-4 (12,000 test sentences)**: **19.07** / 100 (Full PhoMT Test Set evaluation)
+    - **BLEU-4 (600 validation sentences)**: **20.72** / 100 (Grid Search Optimal Peak)
+    - **BLEU-1 / BLEU-2 (12,000 test sentences)**: **52.58** / **36.21**
+- **Inference Speed**: Highly optimized generation using parallel Batch Beam Search (Width=5, Length Penalty $\alpha = 0.8$), achieving real-time translation with average latency of `< 200ms` per sentence on a standard CPU (running via ONNX Runtime in production) and less than 15 seconds for an entire batch of 64 sentences on GPU.
 
 ## 📂 Directory Structure
 
@@ -75,7 +79,7 @@ This system is powered by a custom-trained neural machine translation model, spe
 ├── backend/                 # FastAPI Inference Service
 │   ├── app/                 # Backend Source Code (Python)
 │   ├── config.yaml          # Backend Configuration
-│   ├── requirements.txt     # Backend Dependencies
+│   ├── requirements.txt     # Backend Dependencies (with cachetools)
 │   └── Dockerfile           # Backend Container Config
 ├── frontend/                # Streamlit Web UI Service
 │   ├── app.py               # Streamlit Main UI Code
